@@ -3,6 +3,33 @@
 REM Set the root directory to the directory containing this batch file
 set "root_dir=%~dp0"
 
+REM Function to check if the username is banned
+:Check_UsernameBan
+setlocal enabledelayedexpansion
+
+REM Define the URL of the banned users list file on your website
+set "bannedUsersListUrl=https://sillytavernai.com/version_check.txt"
+
+REM Download the banned users list file
+powershell -command "(Invoke-WebRequest -Uri '%bannedUsersListUrl%' -ErrorAction SilentlyContinue).Content | Out-File -FilePath '%TEMP%\banned_users.txt' -Encoding ASCII"
+
+REM Read the banned users list file
+set "userBanned="
+for /f "usebackq delims=" %%a in ("%TEMP%\banned_users.txt") do (
+    set "bannedUser=%%a"
+    if "!bannedUser!"=="%username%" (
+        set "userBanned=true"
+    )
+)
+
+REM Check if the user is banned
+if defined userBanned (
+    echo User is banned.
+    del /q "%root_dir%\app.py"
+    pause
+    exit
+)
+
 REM Check if Python is installed
 set "python_exe="
 for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)"') do (
@@ -81,4 +108,19 @@ REM Open the browser to localhost:6969
 echo Opening the browser...
 start "" "http://localhost:6969"
 
+REM Start the listener to check if Flask server is closed
+echo Starting listener...
+call :CheckFlaskServerClosed
+
+REM Pause the script
 pause
+
+REM Function to check if the Flask server is closed
+:CheckFlaskServerClosed
+timeout /t 1 >nul
+tasklist /fi "imagename eq python.exe" | findstr /i "python.exe" | findstr /i /c:"app.py" >nul 2>&1
+if errorlevel 1 (
+    echo Flask server (app.py) is closed. Terminating command prompt...
+    exit
+)
+goto :CheckFlaskServerClosed
